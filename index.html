@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Melon Scanner</title>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Melon Scanner" />
+<meta name="theme-color" content="#151f18" />
+
+<style>
+  :root {
+    --bg: #151f18; --panel: #1f2e24; --panelBorder: #33473a;
+    --cream: #f3efe6; --sage: #8ba58f; --coral: #ff6b5b; --gold: #e8b94d; --dim: #5d7365;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    min-height: 100vh; color: var(--cream);
+    font-family: Georgia, 'Iowan Old Style', serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 12px 28px;
+  }
+  @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(232,185,77,0.55); } 100% { box-shadow: 0 0 0 14px rgba(232,185,77,0); } }
+  @keyframes sweep { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .header { text-align: center; margin-bottom: 14px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.24em; color: var(--sage); text-transform: uppercase; }
+  h1 { margin: 4px 0 0; font-size: 22px; font-weight: 700; letter-spacing: 0.01em; }
+  .subtitle { font-size: 12.5px; color: var(--dim); margin-top: 2px; max-width: 320px; }
+
+  .frame {
+    position: relative; width: 100%; max-width: 420px; aspect-ratio: 3/4;
+    border-radius: 18px; overflow: hidden; background: #000;
+    border: 1px solid var(--panelBorder);
+  }
+  video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .overlay-msg {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 20px; font-size: 13px;
+  }
+  .highlight-box {
+    position: absolute; border: 2px solid var(--dim); border-radius: 10px;
+    transition: all 0.18s ease-out; display: none;
+  }
+  .highlight-badge {
+    position: absolute; top: -13px; left: 8px; padding: 2px 8px;
+    color: #151f18; font-size: 11px; font-weight: 700; border-radius: 20px;
+    font-family: 'Courier New', monospace;
+  }
+  .highlight-pulse { position: absolute; inset: -2px; border-radius: 12px; animation: pulseRing 1.6s ease-out infinite; }
+  .sweep {
+    position: absolute; left: 0; right: 0; height: 30%;
+    background: linear-gradient(180deg, rgba(232,185,77,0) 0%, rgba(232,185,77,0.14) 50%, rgba(232,185,77,0) 100%);
+    animation: sweep 2.6s linear infinite;
+  }
+  .sweep-wrap { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .frame-footer {
+    position: absolute; bottom: 10px; left: 10px; right: 10px;
+    display: flex; justify-content: space-between; font-size: 10.5px;
+    color: rgba(243,239,230,0.75); letter-spacing: 0.06em; font-family: 'Courier New', monospace;
+  }
+
+  .ticket {
+    width: 100%; max-width: 420px; margin-top: 14px;
+    background: var(--panel); border: 1px solid var(--panelBorder);
+    border-radius: 14px; padding: 14px 16px;
+  }
+  .ticket-empty { font-size: 13px; color: var(--dim); text-align: center; padding: 6px 0; }
+  .ticket-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .ticket-verdict { font-size: 15px; font-weight: 700; }
+  .ticket-score { font-family: 'Courier New', monospace; font-size: 13px; }
+  .ticket-lines { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .ticket-line { font-size: 12.5px; color: var(--cream); opacity: 0.9; animation: fadeIn 0.35s ease both; }
+
+  .bar-row { display: flex; align-items: center; gap: 8px; }
+  .bar-label { width: 108px; font-size: 10.5px; color: var(--dim); }
+  .bar-track { flex: 1; height: 5px; background: #0f1712; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; transition: width 0.2s ease-out; }
+  .bar-value { width: 26px; font-size: 10.5px; font-family: 'Courier New', monospace; text-align: right; color: var(--cream); }
+  .bars { display: flex; flex-direction: column; gap: 6px; }
+
+  .best-row {
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--panelBorder);
+    display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+  }
+
+  .pause-btn {
+    margin-top: 14px; padding: 9px 20px; border-radius: 24px;
+    background: transparent; border: 1px solid var(--sage);
+    color: var(--sage); font-size: 12.5px; letter-spacing: 0.04em;
+    cursor: pointer; font-family: inherit;
+  }
+  .footnote { font-size: 10.5px; color: var(--dim); margin-top: 16px; max-width: 340px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="eyebrow">Field Grading Demo</div>
+  <h1>Melon Scanner</h1>
+  <div class="subtitle">Heuristic colour &amp; shape analysis — no AI model, just pixel math, live from your camera.</div>
+</div>
+
+<div class="frame" id="frame">
+  <video id="video" playsinline muted></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <div class="overlay-msg" id="statusMsg" style="color: var(--sage);">Requesting camera…</div>
+  <div class="highlight-box" id="highlightBox">
+    <div class="highlight-badge" id="highlightBadge"></div>
+    <div class="highlight-pulse" id="highlightPulse"></div>
+  </div>
+  <div class="sweep-wrap" id="sweepWrap"><div class="sweep"></div></div>
+  <div class="frame-footer">
+    <span id="footerLeft">SEARCHING</span>
+    <span id="footerRight">LIVE</span>
+  </div>
+</div>
+
+<div class="ticket" id="ticket">
+  <div class="ticket-empty" id="ticketEmpty">Point the camera at a melon to begin grading.</div>
+  <div id="ticketBody" style="display:none;">
+    <div class="ticket-head">
+      <div class="ticket-verdict" id="verdict"></div>
+      <div class="ticket-score" id="scoreText"></div>
+    </div>
+    <div class="ticket-lines" id="lines"></div>
+    <div class="bars" id="bars"></div>
+  </div>
+  <div class="best-row" id="bestRow" style="display:none;">
+    <span style="color: var(--sage);">Best seen this session</span>
+    <span class="ticket-score" id="bestScore" style="color: var(--gold);"></span>
+  </div>
+</div>
+
+<button class="pause-btn" id="pauseBtn">Pause scanning</button>
+
+<div class="footnote">
+  Prototype only: grades are estimated from on-screen colour evenness, shape symmetry, and surface sheen —
+  not a substitute for a real ripeness check.
+</div>
+
+<script>
+(function () {
+  var PALETTE = {
+    sage: '#8ba58f', coral: '#ff6b5b', gold: '#e8b94d', dim: '#5d7365',
+  };
+
+  // ---------- Heuristic "grading" engine (no ML — pure pixel math) ----------
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+    }
+    return [h, s, l];
+  }
+
+  function isProduceHue(h, s, l) {
+    if (s < 0.15 || l < 0.08 || l > 0.95) return false;
+    var green = h >= 55 && h <= 165;
+    var pink = h >= 330 || h <= 15;
+    var gold = h > 15 && h < 55;
+    return green || pink || gold;
+  }
+
+  function classifyHue(h) {
+    if (h >= 55 && h <= 165) return 'green';
+    if (h >= 330 || h <= 15) return 'pink';
+    return 'gold';
+  }
+
+  var GRID_W = 64, GRID_H = 48;
+  var offCanvas = document.createElement('canvas');
+  offCanvas.width = GRID_W; offCanvas.height = GRID_H;
+  var offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+
+  function median(arr) {
+    var s = arr.slice().sort(function (a, b) { return a - b; });
+    return s[Math.floor(s.length / 2)] || 0;
+  }
+  function stddev(arr) {
+    if (!arr.length) return 0;
+    var m = arr.reduce(function (a, b) { return a + b; }, 0) / arr.length;
+    return Math.sqrt(arr.reduce(function (a, b) { return a + Math.pow(b - m, 2); }, 0) / arr.length);
+  }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function analyzeFrame(sourceCanvas, videoW, videoH) {
+    offCtx.drawImage(sourceCanvas, 0, 0, videoW, videoH, 0, 0, GRID_W, GRID_H);
+    var data = offCtx.getImageData(0, 0, GRID_W, GRID_H).data;
+
+    var n = GRID_W * GRID_H;
+    var mask = new Uint8Array(n);
+    var hues = new Float32Array(n);
+    var lights = new Float32Array(n);
+
+    for (var i = 0; i < n; i++) {
+      var r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+      var hsl = rgbToHsl(r, g, b);
+      hues[i] = hsl[0]; lights[i] = hsl[2];
+      mask[i] = isProduceHue(hsl[0], hsl[1], hsl[2]) ? 1 : 0;
+    }
+
+    var visited = new Uint8Array(n);
+    var best = null;
+    var stack = [];
+
+    for (var y = 0; y < GRID_H; y++) {
+      for (var x = 0; x < GRID_W; x++) {
+        var idx = y * GRID_W + x;
+        if (!mask[idx] || visited[idx]) continue;
+        var minX = x, maxX = x, minY = y, maxY = y, count = 0;
+        stack.push(idx); visited[idx] = 1;
+        var members = [];
+        while (stack.length) {
+          var cur = stack.pop();
+          var cy = (cur / GRID_W) | 0, cx = cur % GRID_W;
+          count++; members.push(cur);
+          if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
+          var neighbors = [cur - 1, cur + 1, cur - GRID_W, cur + GRID_W];
+          for (var k = 0; k < 4; k++) {
+            var nb = neighbors[k];
+            if (nb < 0 || nb >= n) continue;
+            if (cx === 0 && nb === cur - 1) continue;
+            if (cx === GRID_W - 1 && nb === cur + 1) continue;
+            if (!visited[nb] && mask[nb]) { visited[nb] = 1; stack.push(nb); }
+          }
+        }
+        if (count >= 40 && (!best || count > best.count)) {
+          best = { minX: minX, maxX: maxX, minY: minY, maxY: maxY, count: count, members: members };
+        }
+      }
+    }
+
+    if (!best) return null;
+
+    var memberHues = best.members.map(function (i) { return hues[i]; });
+    var memberLights = best.members.map(function (i) { return lights[i]; });
+    var dominantHue = classifyHue(median(memberHues));
+
+    var hueVar = stddev(memberHues);
+    var lightVar = stddev(memberLights);
+
+    var midX = (best.minX + best.maxX) / 2;
+    var leftSum = 0, leftN = 0, rightSum = 0, rightN = 0;
+    for (var m = 0; m < best.members.length; m++) {
+      var mi = best.members[m];
+      var cx2 = mi % GRID_W;
+      if (cx2 < midX) { leftSum += lights[mi]; leftN++; }
+      else { rightSum += lights[mi]; rightN++; }
+    }
+    var leftAvg = leftN ? leftSum / leftN : 0;
+    var rightAvg = rightN ? rightSum / rightN : 0;
+    var symmetryDelta = Math.abs(leftAvg - rightAvg);
+
+    var evenness = clamp(100 - hueVar * 9, 0, 100);
+    var sheen = clamp(100 - lightVar * 260, 0, 100);
+    var symmetry = clamp(100 - symmetryDelta * 340, 0, 100);
+    var size = clamp(best.count / n * 260, 0, 100);
+    var overall = clamp(evenness * 0.35 + sheen * 0.25 + symmetry * 0.25 + size * 0.15, 0, 100);
+
+    return {
+      box: {
+        x: best.minX / GRID_W, y: best.minY / GRID_H,
+        w: (best.maxX - best.minX + 1) / GRID_W, h: (best.maxY - best.minY + 1) / GRID_H,
+      },
+      dominantHue: dominantHue,
+      scores: { evenness: evenness, sheen: sheen, symmetry: symmetry, size: size },
+      overall: overall,
+    };
+  }
+
+  function commentsFor(result) {
+    var scores = result.scores, overall = result.overall, dominantHue = result.dominantHue;
+    var lines = [];
+    var kind = dominantHue === 'green' ? 'rind' : dominantHue === 'gold' ? 'skin' : 'flesh';
+
+    if (scores.evenness > 70) lines.push('Even ' + kind + ' tone — good sign of consistent ripening.');
+    else if (scores.evenness > 40) lines.push('Some ' + kind + ' mottling — check the rest of the batch.');
+    else lines.push('Patchy ' + kind + ' colour — may be under or over-ripe.');
+
+    if (scores.symmetry > 70) lines.push('Well-balanced, symmetrical shape.');
+    else if (scores.symmetry > 40) lines.push('Slightly lopsided shape — usually still fine.');
+    else lines.push('Noticeably uneven shape — irregular growth.');
+
+    if (scores.sheen > 65) lines.push('Smooth, low-glare surface — often a good sign.');
+    else lines.push('Glossy or blemished patches detected — inspect closely.');
+
+    var verdict = 'Worth a closer look';
+    if (overall > 72) verdict = 'Strong pick';
+    else if (overall > 50) verdict = 'Decent, not the best in frame';
+    else verdict = 'Keep scanning for a better one';
+
+    return { verdict: verdict, lines: lines };
+  }
+
+  // ---------- Wiring to the DOM ----------
+
+  var video = document.getElementById('video');
+  var canvas = document.getElementById('canvas');
+  var statusMsg = document.getElementById('statusMsg');
+  var highlightBox = document.getElementById('highlightBox');
+  var highlightBadge = document.getElementById('highlightBadge');
+  var sweepWrap = document.getElementById('sweepWrap');
+  var footerLeft = document.getElementById('footerLeft');
+  var footerRight = document.getElementById('footerRight');
+  var ticketEmpty = document.getElementById('ticketEmpty');
+  var ticketBody = document.getElementById('ticketBody');
+  var verdictEl = document.getElementById('verdict');
+  var scoreTextEl = document.getElementById('scoreText');
+  var linesEl = document.getElementById('lines');
+  var barsEl = document.getElementById('bars');
+  var bestRow = document.getElementById('bestRow');
+  var bestScoreEl = document.getElementById('bestScore');
+  var pauseBtn = document.getElementById('pauseBtn');
+
+  var ctx = canvas.getContext('2d');
+  var ready = false, scanning = true, lastAnalyze = 0, best = null;
+
+  function colorFor(overall) {
+    if (overall > 72) return PALETTE.sage;
+    if (overall > 50) return PALETTE.gold;
+    return PALETTE.coral;
+  }
+
+  function renderBars(scores) {
+    var rows = [
+      ['Colour evenness', scores.evenness],
+      ['Shape symmetry', scores.symmetry],
+      ['Surface sheen', scores.sheen],
+      ['Fill of frame', scores.size],
+    ];
+    barsEl.innerHTML = '';
+    rows.forEach(function (row) {
+      var label = row[0], val = row[1];
+      var barColor = val > 65 ? PALETTE.sage : val > 40 ? PALETTE.gold : PALETTE.coral;
+      var rowEl = document.createElement('div');
+      rowEl.className = 'bar-row';
+      rowEl.innerHTML =
+        '<div class="bar-label">' + label + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + val + '%;background:' + barColor + ';"></div></div>' +
+        '<div class="bar-value">' + Math.round(val) + '</div>';
+      barsEl.appendChild(rowEl);
+    });
+  }
+
+  function renderResult(result) {
+    if (!result) {
+      highlightBox.style.display = 'none';
+      sweepWrap.style.display = ready ? 'block' : 'none';
+      footerLeft.textContent = 'SEARCHING';
+      ticketEmpty.style.display = 'block';
+      ticketBody.style.display = 'none';
+      return;
+    }
+    sweepWrap.style.display = 'none';
+    var color = colorFor(result.overall);
+
+    highlightBox.style.display = 'block';
+    highlightBox.style.left = (result.box.x * 100) + '%';
+    highlightBox.style.top = (result.box.y * 100) + '%';
+    highlightBox.style.width = (result.box.w * 100) + '%';
+    highlightBox.style.height = (result.box.h * 100) + '%';
+    highlightBox.style.borderColor = color;
+    highlightBadge.textContent = Math.round(result.overall);
+    highlightBadge.style.background = color;
+
+    footerLeft.textContent = result.dominantHue.toUpperCase() + ' MATCH';
+
+    var comment = commentsFor(result);
+    ticketEmpty.style.display = 'none';
+    ticketBody.style.display = 'block';
+    verdictEl.textContent = comment.verdict;
+    scoreTextEl.textContent = Math.round(result.overall) + '/100';
+    scoreTextEl.style.color = color;
+
+    linesEl.innerHTML = '';
+    comment.lines.forEach(function (l) {
+      var d = document.createElement('div');
+      d.className = 'ticket-line';
+      d.textContent = '· ' + l;
+      linesEl.appendChild(d);
+    });
+
+    renderBars(result.scores);
+
+    if (!best || result.overall > best.overall) {
+      best = result;
+      bestRow.style.display = 'flex';
+      bestScoreEl.textContent = Math.round(best.overall) + '/100';
+    }
+  }
+
+  function loop() {
+    if (ready && scanning && video.readyState >= 2) {
+      var w = video.videoWidth, h = video.videoHeight;
+      if (w && h) {
+        canvas.width = w; canvas.height = h;
+        ctx.drawImage(video, 0, 0, w, h);
+        var now = performance.now();
+        if (now - lastAnalyze > 220) {
+          lastAnalyze = now;
+          var result = analyzeFrame(canvas, w, h);
+          renderResult(result);
+        }
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  pauseBtn.addEventListener('click', function () {
+    scanning = !scanning;
+    pauseBtn.textContent = scanning ? 'Pause scanning' : 'Resume scanning';
+    footerRight.textContent = scanning ? 'LIVE' : 'PAUSED';
+  });
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false,
+  }).then(function (stream) {
+    video.srcObject = stream;
+    return video.play();
+  }).then(function () {
+    ready = true;
+    statusMsg.style.display = 'none';
+    sweepWrap.style.display = 'block';
+    requestAnimationFrame(loop);
+  }).catch(function (err) {
+    statusMsg.style.color = PALETTE.coral;
+    statusMsg.textContent = 'Camera unavailable: ' + (err && err.message ? err.message : 'permission denied.');
+  });
+})();
+</script>
+</body>
+</html>
